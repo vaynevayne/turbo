@@ -40,6 +40,7 @@ pnpm-lock.yaml
 /crates/turbopath @vercel/turbo-oss
 /crates/turborepo @vercel/turbo-oss
 /crates/turborepo-api-client @vercel/turbo-oss
+/crates/turborepo-cache @vercel/turbo-oss
 /crates/turborepo-ffi @vercel/turbo-oss
 /crates/turborepo-lib @vercel/turbo-oss
 /crates/turborepo-lockfiles @vercel/turbo-oss
