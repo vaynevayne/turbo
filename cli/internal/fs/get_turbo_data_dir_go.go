@@ -4,6 +4,8 @@
 package fs
 
 import (
+	"fmt"
+
 	"github.com/adrg/xdg"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -12,5 +14,7 @@ import (
 // where turbo can store data files related to turbo.
 func GetTurboDataDir() turbopath.AbsoluteSystemPath {
 	dataHome := AbsoluteSystemPathFromUpstream(xdg.DataHome)
-	return dataHome.UntypedJoin("turborepo")
+	xx := dataHome.UntypedJoin("turborepo")
+	fmt.Printf("[debug] turbodata dir %#v\n", xx)
+	return xx
 }
