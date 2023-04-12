@@ -5,7 +5,7 @@
 # Kill what's running on port 8000 first, but also return 0 exit code if nothing is running on 8000
   $ PID=$(lsof -t -i:8000 2>/dev/null) && [[ -n $PID ]] && kill $PID || true
     
-# Add a token into the direcotry so turborepo will think we are "linked".
+# Add a token into the directory so turborepo will think we are "linked".
   $ export XDG_CONFIG_HOME="${TESTDIR}"
   $ rm -rf "$TESTDIR/turborepo" || true
   $ mkdir -p "$TESTDIR/turborepo"

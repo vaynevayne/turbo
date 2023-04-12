@@ -95,13 +95,7 @@ func (c *APIClient) hasUser() bool {
 
 // IsLinked returns true if we have a user and linked team
 func (c *APIClient) IsLinked() bool {
-	hu := c.hasUser()
-	ht := (c.teamID != "" || c.teamSlug != "")
-	fmt.Printf("[debug] has user %#v\n", hu)
-	fmt.Printf("[debug] has team %#v\n", ht)
-	fmt.Printf("[debug] teamId %#v\n", c.teamID)
-	fmt.Printf("[debug] teamSlug %#v\n", c.teamSlug)
-	return hu && ht
+	return c.hasUser() && (c.teamID != "" || c.teamSlug != "")
 }
 
 // GetTeamID returns the currently configured team id
