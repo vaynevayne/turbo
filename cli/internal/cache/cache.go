@@ -130,7 +130,7 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client *clie
 	}
 
 	if useHTTPCache {
-		implementation := newHTTPCache(opts, *client, recorder)
+		implementation := newHTTPCache(opts, *client, recorder, repoRoot)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
 
