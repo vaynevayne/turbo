@@ -117,7 +117,7 @@ func StringToRef(s string) *string {
 	return &s
 }
 
-// Same as `StringToRef`, but for uint64
+// Uint64ToRef is the same as `StringToRef`, but for uint64
 func Uint64ToRef(i uint64) *uint64 {
 	if i == 0 {
 		return nil
@@ -346,13 +346,13 @@ func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[
 	return hashes.GetHashes(), nil
 }
 
-func HttpCache__Retrieve(hash string, baseUrl string, timeout uint64, version string, token string, teamId string, teamSlug string, usePreflight bool, hasAuthenticator bool, repoRoot turbopath.AbsoluteSystemPath) (bool, []turbopath.AnchoredSystemPath, uint64, error) {
+func HTTPCacheRetrieve(hash string, baseURL string, timeout uint64, version string, token string, teamID string, teamSlug string, usePreflight bool, hasAuthenticator bool, repoRoot turbopath.AbsoluteSystemPath) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	apiClientReq := ffi_proto.NewAPIClientRequest{
-		BaseUrl:      baseUrl,
+		BaseUrl:      baseURL,
 		Timeout:      Uint64ToRef(timeout),
 		Version:      version,
 		Token:        token,
-		TeamId:       teamId,
+		TeamId:       teamID,
 		TeamSlug:     StringToRef(teamSlug),
 		UsePreflight: usePreflight,
 	}
@@ -360,7 +360,7 @@ func HttpCache__Retrieve(hash string, baseUrl string, timeout uint64, version st
 	var authenticator *ffi_proto.NewArtifactSignatureAuthenticatorRequest
 	if hasAuthenticator {
 		authenticator = &ffi_proto.NewArtifactSignatureAuthenticatorRequest{
-			TeamId: teamId,
+			TeamId: teamID,
 		}
 	}
 
