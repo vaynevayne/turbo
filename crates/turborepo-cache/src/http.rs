@@ -227,7 +227,7 @@ impl HttpCache {
             absolute_link_file_path.as_path().is_symlink()
         );
         #[cfg(windows)]
-        os::windows::fs::symlink_file(link_target, link_filename)?;
+        os::windows::fs::symlink_file(&absolute_link_target, &absolute_link_file_path)?;
 
         Ok(())
     }
