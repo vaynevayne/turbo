@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../setup.sh
-  $ . ${TESTDIR}/../setup.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
 
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build -- someargs > /dev/null
@@ -9,34 +9,33 @@ Setup
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1)
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | length'
-  2
+  1
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.version'
   "0"
 
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.attempted'
-  2
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.cached'
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.execution.attempted'
+  1
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.execution.cached'
   0
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.failed'
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.execution.failed'
   0
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.success'
-  2
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.startTime'
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.execution.success'
+  1
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.execution.startTime'
   [0-9]+ (re)
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.executionSummary.endTime'
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.execution.endTime'
   [0-9]+ (re)
 
   $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].execution'
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "status": "built",
-    "error": null,
     "exitCode": 0
   }
-  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].commandArguments'
+  $ cat $(/bin/ls .turbo/runs/*.json | head -n1) | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].cliArguments'
   [
     "someargs"
   ]
