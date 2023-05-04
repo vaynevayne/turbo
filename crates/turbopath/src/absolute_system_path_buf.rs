@@ -164,8 +164,8 @@ impl AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path.as_ref()))
     }
 
-    pub fn join_literal(&self, segment: &str) -> Self {
-        AbsoluteSystemPathBuf(self.0.join(segment))
+    pub fn join_component(&self, component: impl AsRef<Path>) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf(self.0.join(component))
     }
 
     pub fn join_unix_path_literal<S: AsRef<str>>(

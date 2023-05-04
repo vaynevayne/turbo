@@ -96,6 +96,10 @@ impl RelativeUnixPathBuf {
         path.extend_from_slice(&tail.0);
         Self(path)
     }
+
+    pub unsafe fn unchecked_new(path: impl Into<PathBuf>) -> Self {
+        RelativeUnixPathBuf(path.into())
+    }
 }
 
 impl Debug for RelativeUnixPathBuf {
@@ -120,7 +124,7 @@ impl Into<PathBuf> for RelativeUnixPathBuf {
 }
 
 impl TryInto<AnchoredSystemPathBuf> for RelativeUnixPathBuf {
-    type Error = PathValidationError;
+    type Error = PathError;
 
     fn try_into(self) -> Result<AnchoredSystemPathBuf, Self::Error> {
         self.0.as_path().try_into()

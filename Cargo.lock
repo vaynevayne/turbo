@@ -2176,19 +2176,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "erased-serde"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9206,15 +9193,16 @@ dependencies = [
  "bytes",
  "chrono",
  "dunce",
- "env_logger 0.10.0",
  "lazy_static",
  "os_str_bytes",
+ "petgraph",
  "ring",
  "serde",
  "serde_json",
  "tar",
  "tempfile",
  "thiserror",
+ "tracing",
  "turbopath",
  "turborepo-api-client",
  "zstd",

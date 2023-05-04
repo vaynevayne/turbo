@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, env::current_dir, fs, os, path::Path};
 
-use log::{debug, error, info};
 use tar::{Archive, EntryType, Header};
+use tracing::{debug, error, info};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_api_client::APIClient;
 
@@ -138,7 +138,7 @@ impl HttpCache {
                     info!("Restoring file {}", filename.to_string_lossy());
 
                     if let Some(parent) = filename.parent() {
-                        if parent.as_ref() != current_dir()?.as_path() {
+                        if parent.as_path() != current_dir()?.as_path() {
                             fs::create_dir_all(&parent)?;
                             Self::set_dir_mode(0o775, &parent)?;
                         }
@@ -238,9 +238,8 @@ mod tests {
     use std::{collections::HashSet, fs, fs::File};
 
     use anyhow::Result;
-    use log::debug;
     use tempfile::{tempdir, TempDir};
-    use test_log::test;
+    use tracing::debug;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeSystemPathBuf};
 
     use crate::http::HttpCache;
