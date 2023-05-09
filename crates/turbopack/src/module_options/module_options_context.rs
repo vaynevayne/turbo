@@ -7,7 +7,7 @@ use turbopack_ecmascript_plugins::transform::{
     emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
 };
 use turbopack_node::{
-    execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderConfigItemsVc,
+    execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderItemsVc,
 };
 
 use super::ModuleRule;
@@ -19,13 +19,30 @@ pub struct PostCssTransformOptions {
     pub placeholder_for_future_extensions: (),
 }
 
-#[turbo_tasks::value(shared)]
-#[derive(Default, Clone, Debug)]
-pub struct WebpackLoadersOptions {
-    pub extension_to_loaders: IndexMap<String, WebpackLoaderConfigItemsVc>,
-    pub loader_runner_package: Option<ImportMappingVc>,
-    pub placeholder_for_future_extensions: (),
+#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
+pub struct LoaderRuleItem {
+    pub loaders: WebpackLoaderItemsVc,
+    pub rename_as: Option<String>,
 }
+
+#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+pub struct WebpackRules(IndexMap<String, LoaderRuleItem>);
+
+#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+pub struct OptionWebpackRules(Option<WebpackRulesVc>);
+
+#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
+pub struct WebpackLoadersOptions {
+    pub rules: WebpackRulesVc,
+    pub loader_runner_package: Option<ImportMappingVc>,
+}
+
+#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+pub struct OptionWebpackLoadersOptions(Option<WebpackLoadersOptionsVc>);
 
 /// The kind of decorators transform to use.
 /// [TODO]: might need bikeshed for the name (Ecma)
@@ -106,6 +123,7 @@ impl WebpackLoadersOptions {
     }
 }
 
+// [TODO]: should enabled_react_refresh belong to this options?
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 pub struct JsxTransformOptions {
@@ -154,7 +172,9 @@ pub struct ModuleOptionsContext {
     pub enable_styled_components: Option<StyledComponentsTransformConfigVc>,
     pub enable_styled_jsx: bool,
     pub enable_postcss_transform: Option<PostCssTransformOptions>,
-    pub enable_webpack_loaders: Option<WebpackLoadersOptions>,
+    #[serde(default)]
+    pub enable_webpack_loaders: Option<WebpackLoadersOptionsVc>,
+    #[serde(default)]
     pub enable_types: bool,
     pub enable_typescript_transform: Option<TypescriptTransformOptionsVc>,
     pub decorators: Option<DecoratorsOptionsVc>,
