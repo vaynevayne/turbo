@@ -2,12 +2,10 @@ use std::path::PathBuf;
 
 use bstr::BStr;
 
-use crate::{PathError, PathValidationError, RelativeSystemPathBuf};
+use crate::{PathError, PathValidationError, RelativeSystemPathBuf, RelativeUnixPathBuf};
 
 #[repr(transparent)]
-pub struct RelativeUnixPath {
-    inner: BStr,
-}
+pub struct RelativeUnixPath(pub(crate) BStr);
 
 impl RelativeUnixPath {
     pub fn new<P: AsRef<BStr>>(value: &P) -> Result<&Self, PathError> {
@@ -27,14 +25,14 @@ impl RelativeUnixPath {
             // On unix, unix paths are already system paths. Copy the bytes
             // but skip validation.
             use std::{ffi::OsString, os::unix::prelude::OsStringExt};
-            let path = PathBuf::from(OsString::from_vec(self.inner.to_vec()));
+            let path = PathBuf::from(OsString::from_vec(self.0.to_vec()));
             Ok(RelativeSystemPathBuf::new_unchecked(path))
         }
 
         #[cfg(windows)]
         {
             let system_path_bytes = self
-                .inner
+                .0
                 .iter()
                 .map(|byte| if *byte == b'/' { b'\\' } else { *byte })
                 .collect::<Vec<u8>>();
@@ -42,5 +40,49 @@ impl RelativeUnixPath {
             let system_path_buf = PathBuf::from(system_path_string);
             Ok(RelativeSystemPathBuf::new_unchecked(system_path_buf))
         }
+    }
+
+    pub fn to_owned(&self) -> RelativeUnixPathBuf {
+        RelativeUnixPathBuf(self.0.to_owned())
+    }
+
+    pub fn strip_prefix(
+        &self,
+        prefix: impl AsRef<RelativeUnixPath>,
+    ) -> Result<RelativeUnixPathBuf, PathError> {
+        let prefix = prefix.as_ref();
+        let prefix_len = prefix.0.len();
+        if prefix_len == 0 {
+            return Ok(RelativeUnixPathBuf(self.0.to_owned()));
+        }
+        if !self.0.starts_with(&prefix.0) {
+            return Err(PathError::PathValidationError(
+                PathValidationError::NotParent(prefix.0.to_string(), self.0.to_string()),
+            ));
+        }
+
+        // Handle the case where we are stripping the entire contents of this path
+        if self.0.len() == prefix.0.len() {
+            return RelativeUnixPathBuf::new("");
+        }
+
+        // We now know that this path starts with the prefix, and that this path's
+        // length is greater than the prefix's length
+        if self.0[prefix_len] != b'/' {
+            let prefix_str = prefix.0.to_string();
+            let this = self.0.to_string();
+            return Err(PathError::PathValidationError(
+                PathValidationError::PrefixError(prefix_str, this),
+            ));
+        }
+
+        let tail_slice = &self.0[(prefix_len + 1)..];
+        RelativeUnixPathBuf::new(tail_slice.to_vec())
+    }
+}
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPath {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self
     }
 }

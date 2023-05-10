@@ -1,11 +1,11 @@
-use std::{fmt::Debug, io::Write};
+use std::{borrow::Borrow, fmt::Debug, io::Write};
 
-use bstr::{BString, ByteSlice};
+use bstr::{BStr, BString, ByteSlice};
 
-use crate::{PathError, PathValidationError};
+use crate::{PathError, PathValidationError, RelativeUnixPath};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct RelativeUnixPathBuf(BString);
+pub struct RelativeUnixPathBuf(pub(crate) BString);
 
 impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
@@ -52,34 +52,10 @@ impl RelativeUnixPathBuf {
         Ok(())
     }
 
-    pub fn strip_prefix(&self, prefix: &RelativeUnixPathBuf) -> Result<Self, PathError> {
-        let prefix_len = prefix.0.len();
-        if prefix_len == 0 {
-            return Ok(self.clone());
-        }
-        if !self.0.starts_with(&prefix.0) {
-            return Err(PathError::PathValidationError(
-                PathValidationError::NotParent(prefix.0.to_string(), self.0.to_string()),
-            ));
-        }
-
-        // Handle the case where we are stripping the entire contents of this path
-        if self.0.len() == prefix.0.len() {
-            return Self::new("");
-        }
-
-        // We now know that this path starts with the prefix, and that this path's
-        // length is greater than the prefix's length
-        if self.0[prefix_len] != b'/' {
-            let prefix_str = prefix.0.to_str_lossy().into_owned();
-            let this = self.0.to_str_lossy().into_owned();
-            return Err(PathError::PathValidationError(
-                PathValidationError::PrefixError(prefix_str, this),
-            ));
-        }
-
-        let tail_slice = &self.0[(prefix_len + 1)..];
-        Self::new(tail_slice)
+    pub fn strip_prefix(&self, prefix: impl AsRef<RelativeUnixPath>) -> Result<Self, PathError> {
+        //let prefix = prefix.as_ref();
+        let combined: &RelativeUnixPath = self.as_ref();
+        combined.strip_prefix(prefix)
     }
 
     pub fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
@@ -91,6 +67,19 @@ impl RelativeUnixPathBuf {
         }
         path.extend_from_slice(&tail.0);
         Self(path)
+    }
+}
+
+impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn borrow(&self) -> &RelativeUnixPath {
+        let inner = self.0.as_bstr();
+        unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
+    }
+}
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self.borrow()
     }
 }
 
