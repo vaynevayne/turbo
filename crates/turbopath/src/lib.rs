@@ -43,6 +43,10 @@ impl PathError {
             _ => false,
         }
     }
+
+    pub fn invalid_utf8_error(bytes: impl Into<Vec<u8>>) -> Self {
+        Self::Utf8Error(bytes.into())
+    }
 }
 
 // Custom error type for path validation errors

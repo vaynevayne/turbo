@@ -89,10 +89,15 @@ fn glob_match_internal<'a>(
           if is_globstar {
             state.glob_index += 2;
 
+            let token_start = if brace_stack.length > 0 {
+              brace_stack.last().glob_index + 1
+            } else {
+              0
+            };
             if glob.len() == state.glob_index {
               // A trailing ** segment without a following separator.
               state.globstar = state.wildcard;
-            } else if (state.glob_index < 3 || glob[state.glob_index - 3] == b'/')
+            } else if (state.glob_index - token_start < 3 || glob[state.glob_index - 3] == b'/')
               && glob[state.glob_index] == b'/'
             {
               // Matched a full /**/ segment. If the last character in the path was a separator,
@@ -1535,6 +1540,8 @@ mod tests {
     assert_eq!(glob_match(glob, path), Some(false));
   }
 
+  #[test_case("{**/*file}", "some-file")]
+  //#[test_case("{**/*file}", "some-file")]
   #[test_case("**/*.js", "a/b/c/d.js")]
   #[test_case("**/*.js", "a/b/c.js")]
   #[test_case("**/*.js", "a/b.js")]
@@ -1657,6 +1664,17 @@ mod tests {
   #[test_case("a/**/**/*", "a/b/c/d" ; "a doublestar doublestar star a/b/c/d")]
   fn globstars(glob: &str, path: &str) {
     assert_eq!(glob_match(glob, path), Some(true));
+  }
+
+  #[test]
+  fn glob_no_braces() {
+    assert_eq!(glob_match("**/*file", "some-file"), Some(true));
+  }
+
+  #[test]
+  fn glob_braces() {
+    //assert_eq!(glob_match("{**/*file}", "some-file"), Some(true));
+    assert_eq!(glob_match("{florp,**/*file}", "some-file"), Some(true));
   }
 
   #[test_case("a/b/**/*.js", "a/d.js")]
