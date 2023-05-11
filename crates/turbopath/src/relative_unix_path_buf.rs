@@ -20,12 +20,20 @@ impl RelativeUnixPathBuf {
         Ok(Self(BString::new(bytes)))
     }
 
-    pub fn to_str(&self) -> Result<&str, PathError> {
+    pub fn as_str(&self) -> Result<&str, PathError> {
         let s = self
             .0
             .to_str()
             .or_else(|_| Err(PathError::Utf8Error(self.0.as_bytes().to_owned())))?;
         Ok(s)
+    }
+
+    pub unsafe fn unchecked_new(path: impl Into<Vec<u8>>) -> Self {
+        Self(BString::new(path.into()))
+    }
+
+    pub fn into_inner(self) -> BString {
+        self.0
     }
 
     // write_escaped_bytes writes this path to the given writer in the form
@@ -96,10 +104,6 @@ impl RelativeUnixPathBuf {
         path.extend_from_slice(&tail.0);
         Self(path)
     }
-
-    pub unsafe fn unchecked_new(path: impl Into<PathBuf>) -> Self {
-        RelativeUnixPathBuf(path.into())
-    }
 }
 
 impl Debug for RelativeUnixPathBuf {
@@ -108,26 +112,6 @@ impl Debug for RelativeUnixPathBuf {
             Ok(s) => write!(f, "{}", s),
             Err(_) => write!(f, "Non-utf8 {:?}", self.0),
         }
-    }
-}
-
-impl AsRef<Path> for RelativeUnixPathBuf {
-    fn as_ref(&self) -> &Path {
-        self.0.as_path()
-    }
-}
-
-impl Into<PathBuf> for RelativeUnixPathBuf {
-    fn into(self) -> PathBuf {
-        self.0
-    }
-}
-
-impl TryInto<AnchoredSystemPathBuf> for RelativeUnixPathBuf {
-    type Error = PathError;
-
-    fn try_into(self) -> Result<AnchoredSystemPathBuf, Self::Error> {
-        self.0.as_path().try_into()
     }
 }
 

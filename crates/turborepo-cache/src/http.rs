@@ -2,7 +2,10 @@ use std::{backtrace::Backtrace, env::current_dir, fs, os, path::Path};
 
 use tar::{Archive, EntryType, Header};
 use tracing::{debug, error, info};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeSystemPathBuf,
+    RelativeUnixPathBuf,
+};
 use turborepo_api_client::APIClient;
 
 use crate::{signature_authentication::ArtifactSignatureAuthenticator, CacheError};
@@ -114,9 +117,8 @@ impl HttpCache {
 
         for entry in tr.entries()? {
             let mut entry = entry?;
-            let restored_name = RelativeUnixPathBuf::new(entry.path()?)?;
-            let restored_anchored_path: AnchoredSystemPathBuf =
-                <RelativeUnixPathBuf as TryInto<_>>::try_into(restored_name)?;
+            let restored_name = RelativeSystemPathBuf::new(entry.path()?)?;
+            let restored_anchored_path = restored_name.into();
             let filename = root.resolve(&restored_anchored_path);
             files.push(restored_anchored_path.clone());
 

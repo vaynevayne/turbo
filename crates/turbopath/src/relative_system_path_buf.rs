@@ -37,7 +37,7 @@ impl RelativeSystemPathBuf {
         let unchecked_path = unchecked_path.into();
         if unchecked_path.is_absolute() {
             return Err(PathError::PathValidationError(
-                PathValidationError::NotRelative(unchecked_path),
+                PathValidationError::NotRelative(unchecked_path.to_string_lossy().to_string()),
             ));
         }
         let system_path = unchecked_path.into_system()?;

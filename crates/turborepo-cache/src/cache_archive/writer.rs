@@ -8,7 +8,9 @@ use std::{
 };
 
 use tar::{EntryType, Header};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, AnchoredUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, AnchoredUnixPathBuf, RelativeUnixPathBuf,
+};
 
 use crate::CacheError;
 
@@ -82,9 +84,9 @@ impl<'a> CacheArchive<'a> {
         let source_path = anchor.resolve(file_path);
 
         let file_info = fs::symlink_metadata(source_path.as_path())?;
-        let cache_destination_name = file_path.try_into()?;
+        let cache_destination_name = RelativeUnixPathBuf::new(file_path.to_str()?.as_bytes())?;
 
-        let mut header = Self::create_header(cache_destination_name, &file_info)?;
+        let mut header = Self::create_header(cache_destination_name.into(), &file_info)?;
         if file_info.is_symlink() {
             let link = fs::read_link(source_path.as_path())?;
             header.set_link_name(link)?;
@@ -120,36 +122,20 @@ impl<'a> CacheArchive<'a> {
     }
 
     fn create_header(
-        path: AnchoredUnixPathBuf,
+        mut path: AnchoredUnixPathBuf,
         file_info: &fs::Metadata,
     ) -> Result<Header, CacheError> {
         let mut header = Header::new_gnu();
-
-        header.set_path(path.as_path())?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
             header.set_mode(file_info.mode());
         }
-        header.set_path(Self::get_canonical_tar_name(path, file_info.is_dir()))?;
+        path.make_canonical_for_tar(file_info.is_dir());
+        header.set_path(path.as_str()?)?;
 
         Ok(header)
-    }
-
-    fn get_canonical_tar_name(path: AnchoredUnixPathBuf, is_dir: bool) -> PathBuf {
-        let mut path: PathBuf = path.into();
-        if is_dir {
-            // This is a hacky way to add a trailing slash
-            // to a path in Rust. This works because Rust defines
-            // push in terms of path components, so you can think of this
-            // as adding an empty component to the end.
-            // The alternative is two separate implementations for Windows and
-            // Unix that allocate.
-            path.push("")
-        }
-
-        path
     }
 }
 

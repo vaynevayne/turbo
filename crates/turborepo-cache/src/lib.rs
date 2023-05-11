@@ -5,7 +5,7 @@ pub mod cache_archive;
 pub mod http;
 pub mod signature_authentication;
 
-use std::{backtrace, backtrace::Backtrace};
+use std::{backtrace, backtrace::Backtrace, string::FromUtf8Error};
 
 use thiserror::Error;
 
@@ -46,4 +46,6 @@ pub enum CacheError {
     WindowsUnsafeName(String, #[backtrace] Backtrace),
     #[error("tar attempts to write outside of directory: {0}")]
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
+    #[error("File path must be UTF-8")]
+    NonUTF8Encoding(#[from] FromUtf8Error, #[backtrace] Backtrace),
 }

@@ -20,6 +20,7 @@ chrono = { workspace = true }
 dunce = { workspace = true }
 lazy_static = { workspace = true }
 os_str_bytes = "6.5.0"
+path-clean = { workspace = true }
 petgraph = "0.6.3"
 ring = "0.16.20"
 serde = { workspace = true, features = ["derive"] }
