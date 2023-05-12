@@ -14,7 +14,11 @@ use turbopath::{
 };
 
 use crate::{
-    cache_archive::{restore_directory::restore_directory, restore_symlink::canonicalize_linkname},
+    cache_archive::{
+        restore_directory::restore_directory,
+        restore_regular::restore_regular,
+        restore_symlink::{canonicalize_linkname, restore_symlink},
+    },
     CacheError,
 };
 
@@ -33,6 +37,12 @@ impl CacheReader {
             use std::os::unix::fs::OpenOptionsExt;
 
             options.mode(0o777);
+        }
+
+        #[cfg(windows)]
+        {
+            use crate::cache_archive::create::FILE_FLAG_SEQUENTIAL_SCAN;
+            options.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
         }
 
         let file = options.read(true).open(path.as_path())?;
@@ -88,8 +98,8 @@ impl CacheReader {
         let mut symlinks = Vec::new();
 
         for entry in tr.entries()? {
-            let entry = entry?;
-            match restore_entry(anchor, &entry) {
+            let mut entry = entry?;
+            match restore_entry(anchor, &mut entry) {
                 Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
                     symlinks.push(entry);
                 }
@@ -112,22 +122,14 @@ impl CacheReader {
         for entry in symlinks {
             let processed_name = canonicalize_name(&entry.header().path()?)?;
             let processed_sourcename =
-                canonicalize_linkname(anchor, &processed_name, processed_name.to_str()?);
+                canonicalize_linkname(anchor, &processed_name, processed_name.as_path());
             // symlink must have a linkname
             let linkname = entry
                 .header()
                 .link_name()?
                 .expect("symlink without linkname");
 
-            let linkname_str = linkname.to_str().ok_or_else(|| {
-                CacheError::PathError(
-                    PathError::PathValidationError(PathValidationError::InvalidUnicode(
-                        linkname.to_path_buf(),
-                    )),
-                    Backtrace::capture(),
-                )
-            })?;
-            let processed_linkname = canonicalize_linkname(anchor, &processed_name, linkname_str);
+            let processed_linkname = canonicalize_linkname(anchor, &processed_name, &linkname);
 
             let source_name = graph.add_node(processed_sourcename);
             let link_name = graph.add_node(processed_linkname);
@@ -147,18 +149,14 @@ impl CacheReader {
 
 fn restore_entry<T: Read>(
     anchor: &AbsoluteSystemPath,
-    entry: &tar::Entry<T>,
+    entry: &mut Entry<T>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let header = entry.header();
 
     match header.entry_type() {
         tar::EntryType::Directory => restore_directory(anchor, entry.header()),
-        tar::EntryType::Regular => {
-            todo!()
-        }
-        tar::EntryType::Symlink => {
-            todo!()
-        }
+        tar::EntryType::Regular => restore_regular(anchor, entry),
+        tar::EntryType::Symlink => restore_symlink(anchor, entry.header()),
         ty => Err(CacheError::UnsupportedFileType(ty, Backtrace::capture())),
     }
 }

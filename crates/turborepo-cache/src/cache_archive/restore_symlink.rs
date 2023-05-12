@@ -1,6 +1,12 @@
+use std::{
+    backtrace::Backtrace,
+    path::{Path, PathBuf},
+};
+
 use path_clean::clean;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeSystemPathBuf,
 };
 
 use crate::{
@@ -8,22 +14,68 @@ use crate::{
     CacheError,
 };
 
+pub fn restore_symlink(
+    anchor: &AbsoluteSystemPath,
+    header: &tar::Header,
+) -> Result<AnchoredSystemPathBuf, CacheError> {
+    let processed_name = canonicalize_name(&header.path()?)?;
+
+    let processed_linkname = canonicalize_linkname(
+        anchor,
+        &processed_name,
+        &header.link_name()?.expect("has linkname"),
+    )?;
+    if !processed_linkname.exists() {
+        return Err(CacheError::LinkTargetDoesNotExist(
+            processed_linkname.to_string_lossy().to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    actually_restore_symlink(anchor, processed_name.as_anchored_path(), header)?;
+
+    Ok(processed_name)
+}
+
 fn restore_symlink_with_missing_target(
     anchor: &AbsoluteSystemPath,
     header: &tar::Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let processed_name = canonicalize_name(&header.path()?)?;
 
-    actually_restore_symlink(anchor, processed_name.as_anchored_path(), header)
+    actually_restore_symlink(anchor, processed_name.as_anchored_path(), header)?;
+
+    Ok(processed_name)
 }
 
-fn actually_restore_symlink(
+fn actually_restore_symlink<'a>(
     anchor: &AbsoluteSystemPath,
-    processed_name: &AnchoredSystemPath,
+    processed_name: &'a AnchoredSystemPath,
     header: &tar::Header,
-) -> Result<AnchoredSystemPathBuf, CacheError> {
-    safe_mkdir_file(anchor, &processed_name, header.mode()?)?;
-    todo!()
+) -> Result<&'a AnchoredSystemPath, CacheError> {
+    safe_mkdir_file(anchor, &processed_name)?;
+
+    let symlink_from = anchor.resolve(processed_name);
+
+    _ = symlink_from.remove();
+
+    let symlink_to = header.link_name()?.expect("have linkname");
+
+    if symlink_to.is_dir() {
+        symlink_from.symlink_to_file(symlink_to)?;
+    } else {
+        symlink_from.symlink_to_dir(symlink_to)?;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = symlink_from.as_absolute_path().symlink_metadata()?;
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(header.mode()?);
+    }
+
+    Ok(processed_name)
 }
 
 // canonicalizeLinkname determines (lexically) what the resolved path on the
@@ -31,8 +83,8 @@ fn actually_restore_symlink(
 pub fn canonicalize_linkname(
     anchor: &AbsoluteSystemPath,
     processed_name: &AnchoredSystemPathBuf,
-    linkname: &str,
-) {
+    linkname: &Path,
+) -> Result<PathBuf, CacheError> {
     // We don't know _anything_ about linkname. It could be any of:
     //
     // - Absolute Unix Path
@@ -60,6 +112,25 @@ pub fn canonicalize_linkname(
     // 1. Check to see if the link target is absolute _on the current platform_.
     // If it is an absolute path it's canonical by rule.
     if cleaned_linkname.is_absolute() {
-        return;
+        return Ok(cleaned_linkname);
     }
+
+    let cleaned_linkname = RelativeSystemPathBuf::new(cleaned_linkname)?;
+    // Remaining options:
+    // - Absolute (other platform) Path
+    // - Relative Unix Path
+    // - Relative Windows Path
+    //
+    // At this point we simply assume that it's a relative path—no matter
+    // which separators appear in it and where they appear,  We can't do
+    // anything else because the OS will also treat it like that when it is
+    // a link target.
+    //
+    let source = anchor.resolve(processed_name);
+    let canonicalized = source
+        .parent()
+        .unwrap_or(anchor)
+        .join_relative(&cleaned_linkname);
+
+    Ok(clean(canonicalized))
 }

@@ -103,6 +103,10 @@ impl AbsoluteSystemPath {
         }
     }
 
+    pub(crate) unsafe fn new_unchecked(path: &Path) -> &Self {
+        &*(path as *const Path as *const Self)
+    }
+
     pub fn as_path(&self) -> &Path {
         &self.0
     }

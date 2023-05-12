@@ -146,10 +146,10 @@ impl AbsoluteSystemPathBuf {
         self.0.components()
     }
 
-    pub fn parent(&self) -> Option<Self> {
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
         self.0
             .parent()
-            .map(|p| AbsoluteSystemPathBuf(p.to_path_buf()))
+            .map(|p| unsafe { AbsoluteSystemPath::new_unchecked(p) })
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, base: P) -> bool {

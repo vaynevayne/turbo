@@ -35,7 +35,8 @@ struct CacheArchive<'a> {
 }
 
 // Lets windows know that we're going to be reading this file sequentially
-const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;
+#[cfg(windows)]
+pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;
 
 impl<'a> CacheArchive<'a> {
     fn create(path: AbsoluteSystemPathBuf) -> Result<Self, CacheError> {

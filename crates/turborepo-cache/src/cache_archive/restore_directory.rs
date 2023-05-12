@@ -31,10 +31,13 @@ pub fn safe_mkdir_all(
     // Iterate through path segments by os.Separator, appending them onto
     // current_path. Check to see if that path segment is a symlink
     // with a target outside of anchor.
-    let mut current_path: AnchoredSystemPathBuf = RelativeSystemPathBuf::default().into();
+    let mut calculated_anchor = AbsoluteSystemPathBuf::default();
     for component in processed_name.as_path().components() {
-        check_path(anchor, current_path.as_anchored_path())?;
-        current_path.push(component);
+        calculated_anchor = check_path(
+            anchor,
+            calculated_anchor.as_absolute_path(),
+            &RelativeSystemPathBuf::new(component.as_os_str())?,
+        )?;
     }
 
     // If we have made it here we know that it is safe to call fs::create_dir_all
@@ -58,19 +61,32 @@ pub fn safe_mkdir_all(
 }
 
 fn check_path(
-    anchor: &AbsoluteSystemPath,
-    path: &AnchoredSystemPath,
+    original_anchor: &AbsoluteSystemPath,
+    accumulated_anchor: &AbsoluteSystemPath,
+    segment: &RelativeSystemPathBuf,
 ) -> Result<AbsoluteSystemPathBuf, CacheError> {
-    let resolved_path = anchor.resolve(path);
-    // Getting an error here means we failed to stat the path.
-    // Assume that means we're safe and continue.
-    let Ok(file_info) = fs::symlink_metadata(resolved_path.as_path()) else {
-            return Ok(resolved_path);
-        };
+    // Check if the segment itself is sneakily an absolute path...
+    // (looking at you, Windows. CON, AUX...)
+    if segment
+        .components()
+        .any(|c| matches!(c, Component::Prefix(_) | Component::RootDir))
+    {
+        return Err(CacheError::LinkOutsideOfDirectory(
+            segment.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+
+    let combined_path = accumulated_anchor.join_relative(segment);
+    let Ok(file_info) = fs::symlink_metadata(combined_path.as_path()) else {
+        // Getting an error here means we failed to stat the path.
+        // Assume that means we're safe and continue.
+        return Ok(combined_path);
+    };
 
     // If we don't have a symlink, it's safe
     if !file_info.is_symlink() {
-        return Ok(resolved_path);
+        return Ok(combined_path);
     }
 
     // Check to see if the symlink targets outside of the originalAnchor.
@@ -78,19 +94,18 @@ fn check_path(
     // different place.
 
     // 1. Get the target.
-    let link_target = fs::read_link(resolved_path.as_path())?;
+    let link_target = fs::read_link(combined_path.as_path())?;
 
     if link_target.is_absolute() {
         let absolute_link_target = AbsoluteSystemPathBuf::new(link_target.clone())?;
-        if absolute_link_target.as_path().starts_with(&anchor) {
-            return Ok(resolved_path);
+        if absolute_link_target.as_path().starts_with(&original_anchor) {
+            return Ok(absolute_link_target);
         }
     } else {
         let relative_link_target = RelativeSystemPathBuf::new(link_target.clone())?;
-        let computed_target = anchor.join_relative(&relative_link_target);
-        if computed_target.as_path().starts_with(&anchor) {
-            let anchored_link_target: AnchoredSystemPathBuf = relative_link_target.into();
-            return check_path(anchor, anchored_link_target.as_anchored_path());
+        let computed_target = accumulated_anchor.join_relative(&relative_link_target);
+        if computed_target.as_path().starts_with(&original_anchor) {
+            return check_path(original_anchor, accumulated_anchor, &relative_link_target);
         }
     }
 
