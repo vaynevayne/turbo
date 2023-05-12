@@ -37,7 +37,7 @@ pub fn restore_symlink(
     Ok(processed_name)
 }
 
-fn restore_symlink_with_missing_target(
+pub fn restore_symlink_with_missing_target(
     anchor: &AbsoluteSystemPath,
     header: &tar::Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
@@ -72,7 +72,9 @@ fn actually_restore_symlink<'a>(
         use std::os::unix::fs::PermissionsExt;
         let metadata = symlink_from.as_absolute_path().symlink_metadata()?;
         let mut permissions = metadata.permissions();
-        permissions.set_mode(header.mode()?);
+        if let Ok(mode) = header.mode() {
+            permissions.set_mode(mode);
+        }
     }
 
     Ok(processed_name)
