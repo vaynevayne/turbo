@@ -30,7 +30,7 @@ pub(crate) fn find_git_root(
         .current_dir(turbo_root)
         .output()?;
     let root = String::from_utf8(rev_parse.stdout)?;
-    Ok(turbo_root.join_literal(root.trim_end()).to_realpath()?)
+    Ok(turbo_root.join_component(root.trim_end()).to_realpath()?)
 }
 
 #[cfg(test)]

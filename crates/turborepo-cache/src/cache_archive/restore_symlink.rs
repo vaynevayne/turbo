@@ -25,7 +25,8 @@ pub fn restore_symlink(
         &processed_name,
         &header.link_name()?.expect("has linkname"),
     )?;
-    if !processed_linkname.exists() {
+
+    if processed_linkname.symlink_metadata().is_err() {
         return Err(CacheError::LinkTargetDoesNotExist(
             processed_linkname.to_string_lossy().to_string(),
             Backtrace::capture(),

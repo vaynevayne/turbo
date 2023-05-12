@@ -9,7 +9,7 @@ use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
 
 pub use cache::retrieve;
 pub use lockfile::{patches, subgraph, transitive_closure};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeSystemPathBuf};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -195,8 +195,8 @@ pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buff
             return resp.into();
         }
     };
-    let package_path = match AnchoredSystemPathBuf::from_raw(req.package_path) {
-        Ok(package_path) => package_path,
+    let package_path = match RelativeSystemPathBuf::new(req.package_path) {
+        Ok(package_path) => package_path.into(),
         Err(err) => {
             let resp = proto::GetPackageFileHashesFromGitIndexResponse {
                 response: Some(

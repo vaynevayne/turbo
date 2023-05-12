@@ -95,7 +95,10 @@ fn check_path(
 
     // 1. Get the target.
     let link_target = fs::read_link(combined_path.as_path())?;
-
+    println!(
+        "link source: {:?}, link target {:?}",
+        combined_path, link_target
+    );
     if link_target.is_absolute() {
         let absolute_link_target = AbsoluteSystemPathBuf::new(link_target.clone())?;
         if absolute_link_target.as_path().starts_with(&original_anchor) {

@@ -103,7 +103,8 @@ impl CacheReader {
         for entry in tr.entries()? {
             let mut entry = entry?;
             match restore_entry(anchor, &mut entry) {
-                Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
+                Err(CacheError::LinkTargetDoesNotExist(target, _)) => {
+                    println!("target does not exist: {}", target);
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
@@ -186,6 +187,7 @@ fn restore_entry<T: Read>(
 }
 
 pub fn canonicalize_name(name: &Path) -> Result<AnchoredSystemPathBuf, CacheError> {
+    #[allow(unused_variables)]
     let PathValidation {
         well_formed,
         windows_safe,
@@ -278,14 +280,6 @@ mod tests {
 
     use crate::{cache_archive::restore::CacheReader, http::HttpCache, CacheError};
 
-    #[derive(Debug)]
-    struct ExpectedError {
-        #[cfg(unix)]
-        unix: String,
-        #[cfg(windows)]
-        windows: String,
-    }
-
     // Expected output of the cache
     #[derive(Debug)]
     struct ExpectedOutput(Vec<AnchoredSystemPathBuf>);
@@ -304,53 +298,19 @@ mod tests {
             // The target of the symlink
             link_target: AnchoredSystemPathBuf,
         },
+        Fifo {
+            path: AnchoredSystemPathBuf,
+        },
     }
 
     struct TestCase {
         name: &'static str,
         // The files we start with
         input_files: Vec<TarFile>,
-        expected_error: Option<ExpectedError>,
+        expected_error: Option<String>,
         // The expected files (there will be more files than `expected_output`
         // since we want to check entries of symlinked directories)
         expected_files: Vec<TarFile>,
-    }
-
-    fn create_files(test_dir: &TempDir, files: &[TarFile]) -> Result<()> {
-        for file in files {
-            match file {
-                TarFile::File { path, body } => {
-                    let absolute_path = test_dir.path().join(path.as_path());
-                    debug!("creating file: {:?}", absolute_path);
-                    fs::write(absolute_path, body)?;
-                }
-                TarFile::Directory { path } => {
-                    let absolute_path = test_dir.path().join(path.as_path());
-                    debug!("creating directory: {:?}", absolute_path);
-                    fs::create_dir(&absolute_path)?;
-                    debug!("exists: {:?}", absolute_path.exists());
-                }
-                TarFile::Symlink {
-                    link_file,
-                    link_target,
-                } => {
-                    let absolute_link_file = test_dir.path().join(link_file.as_path());
-                    let absolute_link_target = test_dir.path().join(link_target.as_path());
-
-                    debug!(
-                        "creating symlink from {:?} to {:?}",
-                        absolute_link_file, absolute_link_target
-                    );
-
-                    #[cfg(unix)]
-                    std::os::unix::fs::symlink(&absolute_link_target, &absolute_link_file)?;
-                    #[cfg(windows)]
-                    std::os::windows::fs::symlink_file(&absolute_source, &absolute_linkname)?;
-                }
-            }
-        }
-
-        Ok(())
     }
 
     fn generate_tar(test_dir: &TempDir, files: &[TarFile]) -> Result<AbsoluteSystemPathBuf> {
@@ -388,6 +348,13 @@ mod tests {
                     header.set_size(0);
 
                     tar_writer.append_link(&mut header, &link_file, &link_target)?;
+                }
+                // We don't support this, but we need to add it to a tar for testing purposes
+                TarFile::Fifo { path } => {
+                    let mut header = tar::Header::new_gnu();
+                    header.set_entry_type(tar::EntryType::Fifo);
+                    header.set_size(0);
+                    tar_writer.append_data(&mut header, path, empty())?;
                 }
             }
         }
@@ -435,6 +402,7 @@ mod tests {
 
                 assert_eq!(link_target, expected_link_target.as_path().to_path_buf());
             }
+            TarFile::Fifo { .. } => unreachable!("FIFOs are not supported"),
         }
 
         Ok(())
@@ -716,11 +684,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("folder-not-file")?.into(),
                     },
                 ],
-                expected_error: Some(ExpectedError {
-                    unix: "IO error: Is a directory (os error 21)".to_string(),
-                    #[cfg(windows)]
-                    windows: "IO error: Is a directory (os error 21)".to_string(),
-                }),
+                expected_error: Some("IO error: Is a directory (os error 21)".to_string()),
                 expected_files: vec![
                     TarFile::Directory {
                         path: RelativeSystemPathBuf::new("folder-not-file/")?.into(),
@@ -748,11 +712,7 @@ mod tests {
                     },
                 ],
                 expected_files: vec![],
-                expected_error: Some(ExpectedError {
-                    unix: "links in the cache are cyclic".to_string(),
-                    #[cfg(windows)]
-                    windows: "links in the cache are cyclic".to_string(),
-                }),
+                expected_error: Some("links in the cache are cyclic".to_string()),
             },
             TestCase {
                 name: "symlink clobber",
@@ -802,11 +762,83 @@ mod tests {
                     link_file: RelativeSystemPathBuf::new("escape")?.into(),
                     link_target: RelativeSystemPathBuf::new("../")?.into(),
                 }],
-                expected_error: Some(ExpectedError {
-                    unix: "IO error: Operation not permitted (os error 1)".to_string(),
+                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+            },
+            TestCase {
+                name: "Double indirection: file",
+                input_files: vec![
+                    TarFile::Symlink {
+                        link_file: RelativeSystemPathBuf::new("up")?.into(),
+                        link_target: RelativeSystemPathBuf::new("../")?.into(),
+                    },
+                    TarFile::Symlink {
+                        link_file: RelativeSystemPathBuf::new("link")?.into(),
+                        link_target: RelativeSystemPathBuf::new("up")?.into(),
+                    },
+                    TarFile::File {
+                        body: b"file".to_vec(),
+                        path: RelativeSystemPathBuf::new("link/outside-file")?.into(),
+                    },
+                ],
+                expected_files: vec![],
+                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+            },
+            TestCase {
+                name: "Double indirection: folder",
+                input_files: vec![
+                    TarFile::Symlink {
+                        link_file: RelativeSystemPathBuf::new("up")?.into(),
+                        link_target: RelativeSystemPathBuf::new("../")?.into(),
+                    },
+                    TarFile::Symlink {
+                        link_file: RelativeSystemPathBuf::new("link")?.into(),
+                        link_target: RelativeSystemPathBuf::new("up")?.into(),
+                    },
+                    TarFile::Directory {
+                        path: RelativeSystemPathBuf::new("link/level-one/level-two")?.into(),
+                    },
+                ],
+                expected_files: vec![],
+                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+            },
+            TestCase {
+                name: "name traversal",
+                input_files: vec![TarFile::File {
+                    body: b"file".to_vec(),
+                    path: RelativeSystemPathBuf::new("../escape")?.into(),
+                }],
+                expected_files: vec![],
+                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+            },
+            TestCase {
+                name: "windows unsafe",
+                input_files: vec![TarFile::File {
+                    body: b"file".to_vec(),
+                    path: RelativeSystemPathBuf::new("back\\slash\\file")?.into(),
+                }],
+                expected_files: {
+                    #[cfg(unix)]
+                    {
+                        vec![TarFile::File {
+                            body: b"file".to_vec(),
+                            path: RelativeSystemPathBuf::new("back\\slash\\file")?.into(),
+                        }]
+                    }
                     #[cfg(windows)]
-                    windows: "IO error: Operation not permitted (os error 1)".to_string(),
-                }),
+                    vec![]
+                },
+                #[cfg(unix)]
+                expected_error: None,
+                #[cfg(windows)]
+                expected_error: Some("file name is not Windows-safe"),
+            },
+            TestCase {
+                name: "fifo (and others) unsupported",
+                input_files: vec![TarFile::Fifo {
+                    path: RelativeSystemPathBuf::new("fifo")?.into(),
+                }],
+                expected_files: vec![],
+                expected_error: Some("unsupported file type: fifo".to_string()),
             },
         ];
         for test in tests {
@@ -820,14 +852,14 @@ mod tests {
             let cache_reader = CacheReader::open(&archive_path)?;
             let restored_files = match (cache_reader.restore(&anchor), test.expected_error) {
                 (Ok(restored_files), Some(expected_error)) => {
-                    panic!("expected error: {:?}", expected_error);
+                    panic!(
+                        "expected error: {:?}, received {:?}",
+                        expected_error, restored_files
+                    );
                 }
                 (Ok(restored_files), None) => restored_files,
                 (Err(err), Some(expected_error)) => {
-                    #[cfg(unix)]
-                    assert_eq!(err.to_string(), expected_error.unix);
-                    #[cfg(windows)]
-                    assert_eq!(err.to_string(), expected_error.windows);
+                    assert_eq!(err.to_string(), expected_error);
                     continue;
                 }
                 (Err(err), None) => {

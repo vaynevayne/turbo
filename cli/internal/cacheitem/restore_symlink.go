@@ -2,7 +2,6 @@ package cacheitem
 
 import (
 	"archive/tar"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -83,8 +82,6 @@ func topologicallyRestoreSymlinks(dirCache *cachedDirTree, anchor turbopath.Abso
 		processedSourcename := canonicalizeLinkname(anchor, processedName, processedName.ToString())
 		processedLinkname := canonicalizeLinkname(anchor, processedName, header.Linkname)
 
-		fmt.Printf("symlink: %v -> %v\n", processedSourcename, processedLinkname)
-
 		if err != nil {
 			return nil, err
 		}
@@ -111,7 +108,6 @@ func topologicallyRestoreSymlinks(dirCache *cachedDirTree, anchor turbopath.Abso
 		if !ok {
 			return nil
 		}
-		fmt.Printf("looking up %v\n", key)
 		header, exists := lookup[key]
 		if !exists {
 			return nil
