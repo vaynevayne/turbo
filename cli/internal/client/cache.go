@@ -113,6 +113,7 @@ func (c *APIClient) getArtifact(hash string, httpMethod string) (*http.Response,
 	if allowAuth {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+
 	req.Header.Set("User-Agent", c.userAgent())
 	if err != nil {
 		return nil, fmt.Errorf("invalid cache URL: %w", err)
