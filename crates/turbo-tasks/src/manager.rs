@@ -1083,7 +1083,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
-            let _guard = info_span!("schedule_notify_tasks").entered();
+            let _guard = info_span!("schedule_notify_tasks", count = tasks.len()).entered();
             self.backend.invalidate_tasks(tasks.to_vec(), self);
         }
     }
@@ -1098,7 +1098,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
-            let _guard = info_span!("schedule_notify_tasks_set").entered();
+            let _guard = info_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
             self.backend
                 .invalidate_tasks(tasks.iter().copied().collect(), self);
         };
