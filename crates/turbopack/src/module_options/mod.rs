@@ -463,13 +463,16 @@ impl ModuleOptionsVc {
             for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
-                        if glob.contains("/") {
+                        if glob.starts_with("./") || glob.starts_with("../") {
                             ModuleRuleCondition::ResourcePathGlob {
                                 base: execution_context.project_path().await?,
                                 glob: GlobVc::new(glob).await?,
                             }
                         } else {
-                            ModuleRuleCondition::ResourceBasePathGlob(GlobVc::new(glob).await?)
+                            ModuleRuleCondition::ResourcePathGlob {
+                                base: execution_context.project_path().await?,
+                                glob: GlobVc::new(&format!("**/{glob}")).await?,
+                            }
                         },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),

@@ -50,7 +50,7 @@ impl Glob {
     pub fn execute(&self, path: &str) -> bool {
         let match_partial = path.ends_with('/');
         self.iter_matches(path, true, match_partial)
-            .any(|result| matches!(result, ("", _)))
+            .any(|result| matches!(result, GlobMatchResult { remainder: "", .. }))
     }
 
     fn iter_matches<'a>(
@@ -84,6 +84,11 @@ impl Glob {
     }
 }
 
+struct GlobMatchResult<'a> {
+    remainder: &'a str,
+    is_path_separator_equivalent: bool,
+}
+
 struct GlobMatchesIterator<'a> {
     current: &'a str,
     glob: &'a Glob,
@@ -94,7 +99,7 @@ struct GlobMatchesIterator<'a> {
 }
 
 impl<'a> Iterator for GlobMatchesIterator<'a> {
-    type Item = (&'a str, bool);
+    type Item = GlobMatchResult<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -110,14 +115,21 @@ impl<'a> Iterator for GlobMatchesIterator<'a> {
                     self.stack.push(iter);
                     self.stack.last_mut().unwrap()
                 };
-                if let Some((new_path, new_is_path_separator_equivalent)) = iter.next() {
+                if let Some(GlobMatchResult {
+                    remainder: new_path,
+                    is_path_separator_equivalent: new_is_path_separator_equivalent,
+                }) = iter.next()
+                {
                     self.current = new_path;
                     self.is_path_separator_equivalent = new_is_path_separator_equivalent;
 
                     self.index += 1;
 
                     if self.match_partial && self.current.is_empty() {
-                        return Some(("", self.is_path_separator_equivalent));
+                        return Some(GlobMatchResult {
+                            remainder: "",
+                            is_path_separator_equivalent: self.is_path_separator_equivalent,
+                        });
                     }
                 } else {
                     if self.index == 0 {
@@ -134,7 +146,10 @@ impl<'a> Iterator for GlobMatchesIterator<'a> {
                 // backtrack for the next iteration
                 self.index -= 1;
 
-                return Some((self.current, self.is_path_separator_equivalent));
+                return Some(GlobMatchResult {
+                    remainder: self.current,
+                    is_path_separator_equivalent: self.is_path_separator_equivalent,
+                });
             }
         }
     }
@@ -247,14 +262,17 @@ struct GlobPartMatchesIterator<'a> {
 }
 
 impl<'a> Iterator for GlobPartMatchesIterator<'a> {
-    type Item = (&'a str, bool);
+    type Item = GlobMatchResult<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.part {
             GlobPart::AnyDirectories => {
                 if self.index == 0 {
                     self.index += 1;
-                    return Some((self.path, true));
+                    return Some(GlobMatchResult {
+                        remainder: self.path,
+                        is_path_separator_equivalent: true,
+                    });
                 }
                 let mut iter = self.path.chars();
                 if iter.advance_by(self.index - 1).is_err() {
@@ -264,11 +282,17 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                     self.index += 1;
                     match iter.next() {
                         Some('/') => {
-                            return Some((&self.path[self.index - 1..], true));
+                            return Some(GlobMatchResult {
+                                remainder: &self.path[self.index - 1..],
+                                is_path_separator_equivalent: true,
+                            });
                         }
                         Some(_) => {}
                         None => {
-                            return Some((&self.path[self.index - 2..], false));
+                            return Some(GlobMatchResult {
+                                remainder: &self.path[self.index - 2..],
+                                is_path_separator_equivalent: false,
+                            });
                         }
                     }
                 }
@@ -280,10 +304,12 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                     if slice.ends_with('/') {
                         None
                     } else {
-                        Some((
-                            &self.path[self.index..],
-                            self.previous_part_is_path_separator_equivalent && self.index == 1,
-                        ))
+                        Some(GlobMatchResult {
+                            remainder: &self.path[self.index..],
+                            is_path_separator_equivalent: self
+                                .previous_part_is_path_separator_equivalent
+                                && self.index == 1,
+                        })
                     }
                 } else {
                     None
@@ -294,9 +320,15 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                 if self.index == 0 {
                     self.index = 1;
                     if self.path.starts_with('/') {
-                        Some((&self.path[1..], true))
+                        Some(GlobMatchResult {
+                            remainder: &self.path[1..],
+                            is_path_separator_equivalent: true,
+                        })
                     } else if self.previous_part_is_path_separator_equivalent {
-                        Some((self.path, true))
+                        Some(GlobMatchResult {
+                            remainder: self.path,
+                            is_path_separator_equivalent: true,
+                        })
                     } else {
                         None
                     }
@@ -308,7 +340,10 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
                 if let Some(c) = chars.get(self.index) {
                     self.index += 1;
                     if self.path.starts_with(*c) {
-                        return Some((&self.path[1..], false));
+                        return Some(GlobMatchResult {
+                            remainder: &self.path[1..],
+                            is_path_separator_equivalent: false,
+                        });
                     }
                 } else {
                     return None;
@@ -317,15 +352,25 @@ impl<'a> Iterator for GlobPartMatchesIterator<'a> {
             GlobPart::File(name) => {
                 if self.index == 0 && self.path.starts_with(name) {
                     self.index += 1;
-                    Some((&self.path[name.len()..], false))
+                    Some(GlobMatchResult {
+                        remainder: &self.path[name.len()..],
+                        is_path_separator_equivalent: false,
+                    })
                 } else {
                     None
                 }
             }
             GlobPart::Alternatives(alternatives) => loop {
                 if let Some(glob_iterator) = &mut self.glob_iterator {
-                    if let Some((path, is_path_separator_equivalent)) = glob_iterator.next() {
-                        return Some((path, is_path_separator_equivalent));
+                    if let Some(GlobMatchResult {
+                        remainder: path,
+                        is_path_separator_equivalent,
+                    }) = glob_iterator.next()
+                    {
+                        return Some(GlobMatchResult {
+                            remainder: path,
+                            is_path_separator_equivalent,
+                        });
                     } else {
                         self.index += 1;
                         self.glob_iterator = None;

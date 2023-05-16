@@ -32,6 +32,8 @@ impl AssetIdent {
         self.assets.push((key, asset));
     }
 
+    /// Changes the path of the asset based on a given pattern. A `*` in the
+    /// pattern will be replaced with the old path.
     pub async fn rename_as(&mut self, pattern: &str) -> Result<()> {
         let root = self.path.root();
         let path = self.path.await?;
@@ -105,6 +107,8 @@ impl AssetIdentVc {
         Ok(Self::new(Value::new(this)))
     }
 
+    /// Changes the path of the asset based on a given pattern. A `*` in the
+    /// pattern will be replaced with the old path.
     #[turbo_tasks::function]
     pub async fn rename_as(self, pattern: &str) -> Result<Self> {
         let mut this = self.await?.clone_value();

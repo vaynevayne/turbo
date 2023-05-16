@@ -31,7 +31,6 @@ pub enum ModuleRuleCondition {
         #[turbo_tasks(trace_ignore)]
         glob: GlobReadRef,
     },
-    ResourceBasePathGlob(#[turbo_tasks(trace_ignore)] GlobReadRef),
 }
 
 impl ModuleRuleCondition {
@@ -108,13 +107,6 @@ impl ModuleRuleCondition {
                 } else {
                     glob.execute(&path.path)
                 }
-            }
-            ModuleRuleCondition::ResourceBasePathGlob(glob) => {
-                let basename = path
-                    .path
-                    .rsplit_once('/')
-                    .map_or(path.path.as_str(), |(_, b)| b);
-                glob.execute(basename)
             }
             _ => todo!("not implemented yet"),
         })

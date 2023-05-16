@@ -109,20 +109,6 @@ impl Default for TypescriptTransformOptionsVc {
     }
 }
 
-impl WebpackLoadersOptions {
-    pub fn is_empty(&self) -> bool {
-        self.extension_to_loaders.is_empty()
-    }
-
-    pub fn clone_if(&self) -> Option<WebpackLoadersOptions> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.clone())
-        }
-    }
-}
-
 // [TODO]: should enabled_react_refresh belong to this options?
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
