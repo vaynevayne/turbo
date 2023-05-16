@@ -107,6 +107,15 @@ importers:
       ngraph.generators: 19.3.1
       shelljs: 0.8.5
 
+  crates/turbopack-build/js:
+    specifiers:
+      '@next/react-refresh-utils': ^13.0.6
+      '@types/node': ^18.11.11
+    dependencies:
+      '@next/react-refresh-utils': 13.0.6_react-refresh@0.12.0
+    devDependencies:
+      '@types/node': 18.13.0
+
   crates/turbopack-cli/js:
     specifiers:
       '@next/react-refresh-utils': ^13.0.6
@@ -2758,7 +2767,7 @@ packages:
     resolution: {integrity: sha512-ZUxbzKl0IfJILTS6t7ip5fQQM/J3TJYubDm3nMbgubNNYS62eXeUpoLUC8/7fJNiFYHTrGPQn7hspDUzIHX3UA==}
     dependencies:
       '@types/minimatch': 5.1.1
-      '@types/node': 16.11.56
+      '@types/node': 18.13.0
 
   /@types/graceful-fs/4.1.6:
     resolution: {integrity: sha512-Sig0SNORX9fdW+bQuTEovKj3uHcUL6LQKbCrrqb1X7J6/ReAbhCXRAhc+SMejhLELFj2QcyuxmUooZ4bt5ReSw==}

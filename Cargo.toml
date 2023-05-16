@@ -92,6 +92,7 @@ turbo-tasks-testing = { path = "crates/turbo-tasks-testing" }
 turbo-updater = { path = "crates/turborepo-updater" }
 turbopack = { path = "crates/turbopack" }
 turbopack-bench = { path = "crates/turbopack-bench" }
+turbopack-build = { path = "crates/turbopack-build" }
 turbopack-cli = { path = "crates/turbopack-cli" }
 turbopack-cli-utils = { path = "crates/turbopack-cli-utils" }
 turbopack-core = { path = "crates/turbopack-core" }
