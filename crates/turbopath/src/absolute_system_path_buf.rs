@@ -13,7 +13,7 @@ use crate::{
     RelativeSystemPathBuf,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
 
 impl Borrow<AbsoluteSystemPath> for AbsoluteSystemPathBuf {

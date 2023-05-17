@@ -31,7 +31,7 @@ pub fn safe_mkdir_all(
     // Iterate through path segments by os.Separator, appending them onto
     // current_path. Check to see if that path segment is a symlink
     // with a target outside of anchor.
-    let mut calculated_anchor = AbsoluteSystemPathBuf::default();
+    let mut calculated_anchor = anchor.to_owned();
     for component in processed_name.as_path().components() {
         calculated_anchor = check_path(
             anchor,
@@ -78,6 +78,7 @@ fn check_path(
     }
 
     let combined_path = accumulated_anchor.join_relative(segment);
+    println!("combined path: {:?}", combined_path);
     let Ok(file_info) = fs::symlink_metadata(combined_path.as_path()) else {
         // Getting an error here means we failed to stat the path.
         // Assume that means we're safe and continue.
@@ -86,9 +87,10 @@ fn check_path(
 
     // If we don't have a symlink, it's safe
     if !file_info.is_symlink() {
+        println!("IS NOT SYMLINK");
         return Ok(combined_path);
     }
-
+    println!("IS SYMLINK");
     // Check to see if the symlink targets outside of the originalAnchor.
     // We don't do eval symlinks because we could find ourself in a totally
     // different place.
@@ -101,13 +103,15 @@ fn check_path(
     );
     if link_target.is_absolute() {
         let absolute_link_target = AbsoluteSystemPathBuf::new(link_target.clone())?;
-        if absolute_link_target.as_path().starts_with(&original_anchor) {
+        if path_clean::clean(&absolute_link_target).starts_with(&original_anchor) {
             return Ok(absolute_link_target);
         }
     } else {
         let relative_link_target = RelativeSystemPathBuf::new(link_target.clone())?;
-        let computed_target = accumulated_anchor.join_relative(&relative_link_target);
-        if computed_target.as_path().starts_with(&original_anchor) {
+        // We clean here to resolve the `..` and `.` segments.
+        let computed_target =
+            path_clean::clean(accumulated_anchor.join_relative(&relative_link_target));
+        if computed_target.starts_with(&original_anchor) {
             return check_path(original_anchor, accumulated_anchor, &relative_link_target);
         }
     }

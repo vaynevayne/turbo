@@ -293,8 +293,8 @@ mod tests {
             path: AnchoredSystemPathBuf,
         },
         Symlink {
-            // The file that is the symlink
-            link_file: AnchoredSystemPathBuf,
+            // The path of the symlink itself
+            link_path: AnchoredSystemPathBuf,
             // The target of the symlink
             link_target: AnchoredSystemPathBuf,
         },
@@ -338,7 +338,7 @@ mod tests {
                     tar_writer.append_data(&mut header, &path, empty())?;
                 }
                 TarFile::Symlink {
-                    link_file,
+                    link_path: link_file,
                     link_target,
                 } => {
                     debug!("Adding symlink: {:?} -> {:?}", link_file, link_target);
@@ -394,7 +394,7 @@ mod tests {
                 assert!(metadata.is_dir());
             }
             TarFile::Symlink {
-                link_file,
+                link_path: link_file,
                 link_target: expected_link_target,
             } => {
                 let full_link_file = anchor.resolve(link_file);
@@ -558,13 +558,13 @@ mod tests {
                         path: RelativeSystemPathBuf::new("target")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("source")?.into(),
+                        link_path: RelativeSystemPathBuf::new("source")?.into(),
                         link_target: RelativeSystemPathBuf::new("target")?.into(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("source")?.into(),
+                        link_path: RelativeSystemPathBuf::new("source")?.into(),
                         link_target: RelativeSystemPathBuf::new("target")?.into(),
                     },
                     TarFile::Directory {
@@ -602,7 +602,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("folder/")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("folder/symlink")?.into(),
+                        link_path: RelativeSystemPathBuf::new("folder/symlink")?.into(),
                         link_target: RelativeSystemPathBuf::new("../")?.into(),
                     },
                     TarFile::File {
@@ -616,7 +616,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("folder/")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("folder/symlink")?.into(),
+                        link_path: RelativeSystemPathBuf::new("folder/symlink")?.into(),
                         link_target: RelativeSystemPathBuf::new("../")?.into(),
                     },
                     TarFile::File {
@@ -633,15 +633,15 @@ mod tests {
                 name: "pathological symlinks",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("two")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("two")?.into(),
+                        link_path: RelativeSystemPathBuf::new("two")?.into(),
                         link_target: RelativeSystemPathBuf::new("three")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("three")?.into(),
+                        link_path: RelativeSystemPathBuf::new("three")?.into(),
                         link_target: RelativeSystemPathBuf::new("real")?.into(),
                     },
                     TarFile::File {
@@ -652,15 +652,15 @@ mod tests {
                 expected_error: None,
                 expected_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("two")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("two")?.into(),
+                        link_path: RelativeSystemPathBuf::new("two")?.into(),
                         link_target: RelativeSystemPathBuf::new("three")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("three")?.into(),
+                        link_path: RelativeSystemPathBuf::new("three")?.into(),
                         link_target: RelativeSystemPathBuf::new("real")?.into(),
                     },
                     TarFile::File {
@@ -699,15 +699,15 @@ mod tests {
                 name: "symlink cycle",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("two")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("two")?.into(),
+                        link_path: RelativeSystemPathBuf::new("two")?.into(),
                         link_target: RelativeSystemPathBuf::new("three")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("three")?.into(),
+                        link_path: RelativeSystemPathBuf::new("three")?.into(),
                         link_target: RelativeSystemPathBuf::new("one")?.into(),
                     },
                 ],
@@ -718,15 +718,15 @@ mod tests {
                 name: "symlink clobber",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("two")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("three")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("real")?.into(),
                     },
                     TarFile::File {
@@ -736,7 +736,7 @@ mod tests {
                 ],
                 expected_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("one")?.into(),
+                        link_path: RelativeSystemPathBuf::new("one")?.into(),
                         link_target: RelativeSystemPathBuf::new("real")?.into(),
                     },
                     TarFile::File {
@@ -750,7 +750,7 @@ mod tests {
                 name: "symlink traversal",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("escape")?.into(),
+                        link_path: RelativeSystemPathBuf::new("escape")?.into(),
                         link_target: RelativeSystemPathBuf::new("../")?.into(),
                     },
                     TarFile::File {
@@ -759,20 +759,20 @@ mod tests {
                     },
                 ],
                 expected_files: vec![TarFile::Symlink {
-                    link_file: RelativeSystemPathBuf::new("escape")?.into(),
+                    link_path: RelativeSystemPathBuf::new("escape")?.into(),
                     link_target: RelativeSystemPathBuf::new("../")?.into(),
                 }],
-                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
             },
             TestCase {
                 name: "Double indirection: file",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("up")?.into(),
+                        link_path: RelativeSystemPathBuf::new("up")?.into(),
                         link_target: RelativeSystemPathBuf::new("../")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("link")?.into(),
+                        link_path: RelativeSystemPathBuf::new("link")?.into(),
                         link_target: RelativeSystemPathBuf::new("up")?.into(),
                     },
                     TarFile::File {
@@ -781,17 +781,17 @@ mod tests {
                     },
                 ],
                 expected_files: vec![],
-                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
             },
             TestCase {
                 name: "Double indirection: folder",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("up")?.into(),
+                        link_path: RelativeSystemPathBuf::new("up")?.into(),
                         link_target: RelativeSystemPathBuf::new("../")?.into(),
                     },
                     TarFile::Symlink {
-                        link_file: RelativeSystemPathBuf::new("link")?.into(),
+                        link_path: RelativeSystemPathBuf::new("link")?.into(),
                         link_target: RelativeSystemPathBuf::new("up")?.into(),
                     },
                     TarFile::Directory {
@@ -799,7 +799,7 @@ mod tests {
                     },
                 ],
                 expected_files: vec![],
-                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
             },
             TestCase {
                 name: "name traversal",
@@ -808,7 +808,7 @@ mod tests {
                     path: RelativeSystemPathBuf::new("../escape")?.into(),
                 }],
                 expected_files: vec![],
-                expected_error: Some("IO error: Operation not permitted (os error 1)".to_string()),
+                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
             },
             TestCase {
                 name: "windows unsafe",
