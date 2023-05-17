@@ -84,8 +84,13 @@ impl Glob {
     }
 }
 
+/// The state after a glob (part) has matched
 struct GlobMatchResult<'a> {
+    /// Remaining string after the match
     remainder: &'a str,
+    /// True, if the matched part should be considered as path-separator
+    /// equivalent. When this is true a `/` will successfully match without
+    /// needing to consume a `/` in the string.
     is_path_separator_equivalent: bool,
 }
 
