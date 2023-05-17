@@ -1,9 +1,6 @@
-use std::path::{Path, PathBuf};
-
 use bstr::{BString, ByteSlice};
-use serde::Serialize;
 
-use crate::{AnchoredSystemPathBuf, IntoUnix, PathError, PathValidationError, RelativeUnixPathBuf};
+use crate::{PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct AnchoredUnixPathBuf(BString);

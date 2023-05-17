@@ -5,8 +5,7 @@ use std::{
 
 use path_clean::clean;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-    RelativeSystemPathBuf,
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeSystemPathBuf,
 };
 
 use crate::{

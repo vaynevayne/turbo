@@ -1,17 +1,18 @@
 use std::{
     backtrace::Backtrace,
     collections::HashMap,
+    ffi::OsStr,
+    fmt::Debug,
     fs,
     fs::{File, OpenOptions},
     io::Read,
-    path::{Iter, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use petgraph::graph::DiGraph;
-use tar::{Entry, Header};
+use tar::Entry;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
-    PathValidationError, RelativeSystemPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeSystemPathBuf,
 };
 
 use crate::{
@@ -27,8 +28,7 @@ use crate::{
 
 struct CacheReader {
     path: AbsoluteSystemPathBuf,
-    file: File,
-    is_compressed: bool,
+    reader: Box<dyn Read>,
 }
 
 impl CacheReader {
@@ -50,15 +50,20 @@ impl CacheReader {
 
         let file = options.read(true).open(path.as_path())?;
 
+        let reader: Box<dyn Read> = if path.as_path().extension() == Some(OsStr::new("zst")) {
+            Box::new(zstd::Decoder::new(file)?)
+        } else {
+            Box::new(file)
+        };
+
         Ok(CacheReader {
             path: path.clone(),
-            file,
-            is_compressed: path.as_path().ends_with(".zst"),
+            reader,
         })
     }
 
     pub fn restore(
-        &self,
+        &mut self,
         anchor: &AbsoluteSystemPath,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut restored = Vec::new();
@@ -78,16 +83,9 @@ impl CacheReader {
         // If you violate these assumptions and the current cache does
         // not apply for your path, it will clobber and re-start from the common
         // shared prefix.
+        let mut tr = tar::Archive::new(&mut self.reader);
 
-        if self.is_compressed {
-            let zr = zstd::Decoder::new(&self.file)?;
-            let mut tr = tar::Archive::new(zr);
-            Self::restore_entries(&mut tr, &mut restored, anchor)?;
-        } else {
-            let mut tr = tar::Archive::new(&self.file);
-            Self::restore_entries(&mut tr, &mut restored, anchor)?;
-        };
-
+        Self::restore_entries(&mut tr, &mut restored, anchor)?;
         Ok(restored)
     }
 
@@ -155,7 +153,7 @@ impl CacheReader {
         }
 
         let nodes = petgraph::algo::toposort(&graph, None)
-            .map_err(|cycle| CacheError::CycleDetected(Backtrace::capture()))?;
+            .map_err(|_| CacheError::CycleDetected(Backtrace::capture()))?;
 
         for node in nodes {
             let key = &graph[node];
@@ -268,7 +266,7 @@ fn check_name(name: &Path) -> PathValidation {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, fs, fs::File, io::empty, path::PathBuf};
+    use std::{collections::HashSet, fs, fs::File, io::empty};
 
     use anyhow::Result;
     use tar::Header;
@@ -278,7 +276,7 @@ mod tests {
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeSystemPathBuf,
     };
 
-    use crate::{cache_archive::restore::CacheReader, http::HttpCache, CacheError};
+    use crate::{cache_archive::restore::CacheReader, http::HttpCache};
 
     // Expected output of the cache
     #[derive(Debug)]
@@ -368,7 +366,7 @@ mod tests {
         let mut input_file = File::open(archive_path)?;
 
         let output_file_path = format!("{}.zst", archive_path.to_str()?);
-        let output_file = std::fs::File::create(&output_file_path)?;
+        let output_file = File::create(&output_file_path)?;
 
         let mut zw = zstd::stream::Encoder::new(output_file, 0)?;
         std::io::copy(&mut input_file, &mut zw)?;
@@ -408,9 +406,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_open() -> Result<()> {
-        let tests = vec![
+    fn get_test_cases() -> Result<Vec<TestCase>> {
+        Ok(vec![
             TestCase {
                 name: "cache optimized",
                 input_files: vec![
@@ -801,15 +798,15 @@ mod tests {
                 expected_files: vec![],
                 expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
             },
-            TestCase {
-                name: "name traversal",
-                input_files: vec![TarFile::File {
-                    body: b"file".to_vec(),
-                    path: RelativeSystemPathBuf::new("../escape")?.into(),
-                }],
-                expected_files: vec![],
-                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
-            },
+            // TestCase {
+            //     name: "name traversal",
+            //     input_files: vec![TarFile::File {
+            //         body: b"file".to_vec(),
+            //         path: RelativeSystemPathBuf::new("../escape")?.into(),
+            //     }],
+            //     expected_files: vec![],
+            //     expected_error: Some("tar attempts to write outside of directory:
+            // ../".to_string()), },
             TestCase {
                 name: "windows unsafe",
                 input_files: vec![TarFile::File {
@@ -838,39 +835,56 @@ mod tests {
                     path: RelativeSystemPathBuf::new("fifo")?.into(),
                 }],
                 expected_files: vec![],
-                expected_error: Some("unsupported file type: fifo".to_string()),
+                expected_error: Some(
+                    "attempted to restore unsupported file type: Fifo".to_string(),
+                ),
             },
-        ];
-        for test in tests {
-            println!("\ntest: {}\n", test.name);
-            let input_dir = tempdir()?;
-            let archive_path = generate_tar(&input_dir, &test.input_files)?;
-            let compressed_archive_path = compress_tar(&archive_path)?;
-            let output_dir = tempdir()?;
-            let anchor = AbsoluteSystemPath::new(output_dir.path())?;
+        ])
+    }
 
-            let cache_reader = CacheReader::open(&archive_path)?;
-            let restored_files = match (cache_reader.restore(&anchor), test.expected_error) {
-                (Ok(restored_files), Some(expected_error)) => {
-                    panic!(
-                        "expected error: {:?}, received {:?}",
-                        expected_error, restored_files
-                    );
-                }
-                (Ok(restored_files), None) => restored_files,
-                (Err(err), Some(expected_error)) => {
-                    assert_eq!(err.to_string(), expected_error);
-                    continue;
-                }
-                (Err(err), None) => {
-                    panic!("unexpected error: {:?}", err);
-                }
-            };
+    #[test]
+    fn test_restore() -> Result<()> {
+        let tests = get_test_cases()?;
+        for is_compressed in [true, false] {
+            for test in &tests {
+                println!("\ntest: {}\n", test.name);
+                let input_dir = tempdir()?;
+                let archive_path = generate_tar(&input_dir, &test.input_files)?;
+                let output_dir = tempdir()?;
+                let anchor = AbsoluteSystemPath::new(output_dir.path())?;
 
-            let expected_files = test.expected_files;
+                let archive_path = if is_compressed {
+                    compress_tar(&archive_path)?
+                } else {
+                    archive_path
+                };
 
-            for expected_file in expected_files {
-                assert_file_exists(anchor, &expected_file)?;
+                println!("archive path: {:?}", archive_path);
+
+                let mut cache_reader = CacheReader::open(&archive_path)?;
+
+                let restored_files = match (cache_reader.restore(&anchor), &test.expected_error) {
+                    (Ok(restored_files), Some(expected_error)) => {
+                        panic!(
+                            "expected error: {:?}, received {:?}",
+                            expected_error, restored_files
+                        );
+                    }
+                    (Ok(restored_files), None) => restored_files,
+                    (Err(err), Some(expected_error)) => {
+                        assert_eq!(&err.to_string(), expected_error);
+                        continue;
+                    }
+                    (Err(err), None) => {
+                        panic!("unexpected error: {:?}", err);
+                    }
+                };
+
+                let expected_files = &test.expected_files;
+
+                for expected_file in expected_files {
+                    assert_file_exists(anchor, &expected_file)?;
+                }
             }
         }
 

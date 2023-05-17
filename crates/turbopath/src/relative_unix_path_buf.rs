@@ -1,12 +1,8 @@
-use std::{
-    fmt::Debug,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{fmt::Debug, io::Write};
 
 use bstr::{BString, ByteSlice};
 
-use crate::{AnchoredSystemPathBuf, IntoUnix, PathError, PathValidationError};
+use crate::{PathError, PathValidationError};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeUnixPathBuf(BString);

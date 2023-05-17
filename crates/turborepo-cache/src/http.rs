@@ -2,10 +2,7 @@ use std::{backtrace::Backtrace, env::current_dir, fs, os, path::Path};
 
 use tar::{Archive, EntryType, Header};
 use tracing::{debug, error, info};
-use turbopath::{
-    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeSystemPathBuf,
-    RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeSystemPathBuf};
 use turborepo_api_client::APIClient;
 
 use crate::{signature_authentication::ArtifactSignatureAuthenticator, CacheError};

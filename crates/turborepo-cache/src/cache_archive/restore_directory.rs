@@ -1,10 +1,7 @@
-use std::{
-    backtrace::Backtrace,
-    fs,
-    path::{Component, Components},
-};
+use std::{backtrace::Backtrace, fs, path::Component};
 
 use tar::Header;
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeSystemPathBuf,
@@ -78,7 +75,6 @@ fn check_path(
     }
 
     let combined_path = accumulated_anchor.join_relative(segment);
-    println!("combined path: {:?}", combined_path);
     let Ok(file_info) = fs::symlink_metadata(combined_path.as_path()) else {
         // Getting an error here means we failed to stat the path.
         // Assume that means we're safe and continue.
@@ -87,17 +83,16 @@ fn check_path(
 
     // If we don't have a symlink, it's safe
     if !file_info.is_symlink() {
-        println!("IS NOT SYMLINK");
         return Ok(combined_path);
     }
-    println!("IS SYMLINK");
+
     // Check to see if the symlink targets outside of the originalAnchor.
     // We don't do eval symlinks because we could find ourself in a totally
     // different place.
 
     // 1. Get the target.
     let link_target = fs::read_link(combined_path.as_path())?;
-    println!(
+    debug!(
         "link source: {:?}, link target {:?}",
         combined_path, link_target
     );

@@ -3,8 +3,6 @@ use std::{
     fs,
     fs::{File, OpenOptions},
     io::{BufWriter, Read},
-    path::PathBuf,
-    time::SystemTime,
 };
 
 use tar::{EntryType, Header};

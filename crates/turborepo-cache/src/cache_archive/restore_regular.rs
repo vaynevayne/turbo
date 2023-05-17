@@ -1,9 +1,7 @@
 use std::{fs::OpenOptions, io, io::Read, path::Path};
 
 use tar::Entry;
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
     cache_archive::{restore::canonicalize_name, restore_directory::safe_mkdir_all},
