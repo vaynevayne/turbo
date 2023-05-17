@@ -102,7 +102,6 @@ impl CacheReader {
             let mut entry = entry?;
             match restore_entry(anchor, &mut entry) {
                 Err(CacheError::LinkTargetDoesNotExist(target, _)) => {
-                    println!("target does not exist: {}", target);
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
@@ -136,10 +135,6 @@ impl CacheReader {
 
             let processed_linkname = canonicalize_linkname(anchor, &processed_name, &linkname)?;
 
-            println!(
-                "symlink: {:?} -> {:?}",
-                processed_sourcename, processed_linkname
-            );
             let source_node = *nodes
                 .entry(processed_sourcename.clone())
                 .or_insert_with(|| graph.add_node(processed_sourcename.clone()));
@@ -157,7 +152,6 @@ impl CacheReader {
 
         for node in nodes {
             let key = &graph[node];
-            println!("looking up {:?}", key);
 
             let Some(header) = header_lookup.get(key) else {
                 continue
@@ -847,7 +841,6 @@ mod tests {
         let tests = get_test_cases()?;
         for is_compressed in [true, false] {
             for test in &tests {
-                println!("\ntest: {}\n", test.name);
                 let input_dir = tempdir()?;
                 let archive_path = generate_tar(&input_dir, &test.input_files)?;
                 let output_dir = tempdir()?;
@@ -858,8 +851,6 @@ mod tests {
                 } else {
                     archive_path
                 };
-
-                println!("archive path: {:?}", archive_path);
 
                 let mut cache_reader = CacheReader::open(&archive_path)?;
 
