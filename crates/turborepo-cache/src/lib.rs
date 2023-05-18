@@ -46,6 +46,4 @@ pub enum CacheError {
     WindowsUnsafeName(String, #[backtrace] Backtrace),
     #[error("tar attempts to write outside of directory: {0}")]
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
-    #[error("File path must be UTF-8")]
-    NonUTF8Encoding(#[from] FromUtf8Error, #[backtrace] Backtrace),
 }

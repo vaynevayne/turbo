@@ -215,6 +215,7 @@ pub fn canonicalize_name(name: &Path) -> Result<AnchoredSystemPathBuf, CacheErro
     Ok(RelativeSystemPathBuf::new(no_trailing_slash)?.into())
 }
 
+#[derive(Debug, PartialEq)]
 struct PathValidation {
     well_formed: bool,
     windows_safe: bool,
@@ -276,7 +277,10 @@ mod tests {
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeSystemPathBuf,
     };
 
-    use crate::{cache_archive::restore::CacheReader, http::HttpCache};
+    use crate::{
+        cache_archive::restore::{check_name, CacheReader, PathValidation},
+        http::HttpCache,
+    };
 
     // Expected output of the cache
     #[derive(Debug)]
@@ -933,6 +937,235 @@ mod tests {
                     assert_file_exists(anchor, &expected_file)?;
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    struct CheckNameTestCase {
+        path: &'static str,
+        expected_output: PathValidation,
+    }
+
+    #[test]
+    fn test_check_name() -> Result<()> {
+        let test_cases = vec![
+            CheckNameTestCase {
+                path: "",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: false,
+                },
+            },
+            CheckNameTestCase {
+                path: ".",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "..",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "./",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "../",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "./a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "../a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/.",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/..",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/.",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/..",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "//",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/./",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/../",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a//",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/./",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/../",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "//a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/./a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "/../a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a//a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/./a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/../a",
+                expected_output: PathValidation {
+                    well_formed: false,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "...",
+                expected_output: PathValidation {
+                    well_formed: true,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: ".../a",
+                expected_output: PathValidation {
+                    well_formed: true,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/...",
+                expected_output: PathValidation {
+                    well_formed: true,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: "a/.../a",
+                expected_output: PathValidation {
+                    well_formed: true,
+                    windows_safe: true,
+                },
+            },
+            CheckNameTestCase {
+                path: ".../...",
+                expected_output: PathValidation {
+                    well_formed: true,
+                    windows_safe: true,
+                },
+            },
+        ];
+
+        for test_case in test_cases {
+            println!("checking {}", test_case.path);
+            let output = check_name(Path::new(test_case.path));
+            assert_eq!(output, test_case.expected_output);
         }
 
         Ok(())
