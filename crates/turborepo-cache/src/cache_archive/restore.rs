@@ -2,9 +2,8 @@ use std::{
     backtrace::Backtrace,
     collections::HashMap,
     ffi::OsStr,
-    fmt::Debug,
     fs,
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::Read,
     path::{Path, PathBuf},
 };
@@ -27,11 +26,21 @@ use crate::{
 };
 
 struct CacheReader {
-    path: AbsoluteSystemPathBuf,
     reader: Box<dyn Read>,
 }
 
 impl CacheReader {
+    #[cfg(test)]
+    pub fn new(reader: impl Read + 'static, is_compressed: bool) -> Result<Self, CacheError> {
+        let reader: Box<dyn Read> = if is_compressed {
+            Box::new(zstd::Decoder::new(reader)?)
+        } else {
+            Box::new(reader)
+        };
+
+        Ok(CacheReader { reader })
+    }
+
     pub fn open(path: &AbsoluteSystemPathBuf) -> Result<Self, CacheError> {
         let mut options = OpenOptions::new();
 
@@ -56,10 +65,7 @@ impl CacheReader {
             Box::new(file)
         };
 
-        Ok(CacheReader {
-            path: path.clone(),
-            reader,
-        })
+        Ok(CacheReader { reader })
     }
 
     pub fn restore(
@@ -101,7 +107,7 @@ impl CacheReader {
         for entry in tr.entries()? {
             let mut entry = entry?;
             match restore_entry(anchor, &mut entry) {
-                Err(CacheError::LinkTargetDoesNotExist(target, _)) => {
+                Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
@@ -260,7 +266,7 @@ fn check_name(name: &Path) -> PathValidation {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, fs, fs::File, io::empty};
+    use std::{collections::HashSet, fs, fs::File, io::empty, path::Path};
 
     use anyhow::Result;
     use tar::Header;
@@ -299,10 +305,12 @@ mod tests {
         name: &'static str,
         // The files we start with
         input_files: Vec<TarFile>,
-        expected_error: Option<String>,
         // The expected files (there will be more files than `expected_output`
         // since we want to check entries of symlinked directories)
         expected_files: Vec<TarFile>,
+        // What we expect to get from CacheArchive::restore, either a
+        // Vec of restored files, or an error (represented as a string)
+        expected_output: Result<Vec<AnchoredSystemPathBuf>, String>,
     }
 
     fn generate_tar(test_dir: &TempDir, files: &[TarFile]) -> Result<AbsoluteSystemPathBuf> {
@@ -400,8 +408,42 @@ mod tests {
         Ok(())
     }
 
-    fn get_test_cases() -> Result<Vec<TestCase>> {
-        Ok(vec![
+    fn into_anchored_system_path_vec(items: Vec<&'static str>) -> Vec<AnchoredSystemPathBuf> {
+        items
+            .into_iter()
+            .map(|item| AnchoredSystemPathBuf::try_from(Path::new(item)).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn test_name_traversal() -> Result<()> {
+        let tar_bytes = include_bytes!("../../fixtures/name-traversal.tar");
+        let mut cache_reader = CacheReader::new(&tar_bytes[..], false)?;
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPath::new(output_dir.path())?;
+        let result = cache_reader.restore(&anchor);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "file name is malformed: ../escape"
+        );
+
+        let tar_bytes = include_bytes!("../../fixtures/name-traversal.tar.zst");
+        let mut cache_reader = CacheReader::new(&tar_bytes[..], true)?;
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPath::new(output_dir.path())?;
+        let result = cache_reader.restore(&anchor);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "file name is malformed: ../escape"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_restore() -> Result<()> {
+        let tests = vec![
             TestCase {
                 name: "cache optimized",
                 input_files: vec![
@@ -470,7 +512,17 @@ mod tests {
                         body: vec![],
                     },
                 ],
-                expected_error: None,
+                expected_output: Ok(into_anchored_system_path_vec(vec![
+                    "one",
+                    "one/two",
+                    "one/two/three",
+                    "one/two/a",
+                    "one/two/three/file-one",
+                    "one/two/three/file-two",
+                    "one/two/a/file",
+                    "one/two/b",
+                    "one/two/b/file",
+                ])),
             },
             TestCase {
                 name: "pathological cache works",
@@ -507,7 +559,6 @@ mod tests {
                         path: RelativeSystemPathBuf::new("one/two/three/file-two")?.into(),
                     },
                 ],
-                expected_error: None,
                 expected_files: vec![
                     TarFile::Directory {
                         path: RelativeSystemPathBuf::new("one/")?.into(),
@@ -541,6 +592,17 @@ mod tests {
                         body: vec![],
                     },
                 ],
+                expected_output: Ok(into_anchored_system_path_vec(vec![
+                    "one",
+                    "one/two",
+                    "one/two/a",
+                    "one/two/b",
+                    "one/two/three",
+                    "one/two/a/file",
+                    "one/two/b/file",
+                    "one/two/three/file-one",
+                    "one/two/three/file-two",
+                ])),
             },
             TestCase {
                 name: "symlink hello world",
@@ -562,7 +624,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("target")?.into(),
                     },
                 ],
-                expected_error: None,
+                expected_output: Ok(into_anchored_system_path_vec(vec!["target", "source"])),
             },
             TestCase {
                 name: "nested file",
@@ -584,7 +646,7 @@ mod tests {
                         body: b"file".to_vec(),
                     },
                 ],
-                expected_error: None,
+                expected_output: Ok(into_anchored_system_path_vec(vec!["folder", "folder/file"])),
             },
             TestCase {
                 name: "nested symlink",
@@ -601,7 +663,6 @@ mod tests {
                         body: b"folder-sibling".to_vec(),
                     },
                 ],
-                expected_error: None,
                 expected_files: vec![
                     TarFile::Directory {
                         path: RelativeSystemPathBuf::new("folder/")?.into(),
@@ -619,6 +680,11 @@ mod tests {
                         body: b"folder-sibling".to_vec(),
                     },
                 ],
+                expected_output: Ok(into_anchored_system_path_vec(vec![
+                    "folder",
+                    "folder/symlink",
+                    "folder/symlink/folder-sibling",
+                ])),
             },
             TestCase {
                 name: "pathological symlinks",
@@ -640,7 +706,6 @@ mod tests {
                         path: RelativeSystemPathBuf::new("real")?.into(),
                     },
                 ],
-                expected_error: None,
                 expected_files: vec![
                     TarFile::Symlink {
                         link_path: RelativeSystemPathBuf::new("one")?.into(),
@@ -659,6 +724,9 @@ mod tests {
                         body: b"real".to_vec(),
                     },
                 ],
+                expected_output: Ok(into_anchored_system_path_vec(vec![
+                    "real", "one", "two", "three",
+                ])),
             },
             TestCase {
                 name: "place file at dir location",
@@ -675,7 +743,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("folder-not-file")?.into(),
                     },
                 ],
-                expected_error: Some("IO error: Is a directory (os error 21)".to_string()),
+
                 expected_files: vec![
                     TarFile::Directory {
                         path: RelativeSystemPathBuf::new("folder-not-file/")?.into(),
@@ -685,6 +753,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("folder-not-file/subfile")?.into(),
                     },
                 ],
+                expected_output: Err("IO error: Is a directory (os error 21)".to_string()),
             },
             TestCase {
                 name: "symlink cycle",
@@ -703,7 +772,7 @@ mod tests {
                     },
                 ],
                 expected_files: vec![],
-                expected_error: Some("links in the cache are cyclic".to_string()),
+                expected_output: Err("links in the cache are cyclic".to_string()),
             },
             TestCase {
                 name: "symlink clobber",
@@ -735,7 +804,7 @@ mod tests {
                         path: RelativeSystemPathBuf::new("real")?.into(),
                     },
                 ],
-                expected_error: None,
+                expected_output: Ok(into_anchored_system_path_vec(vec!["real", "one"])),
             },
             TestCase {
                 name: "symlink traversal",
@@ -753,7 +822,7 @@ mod tests {
                     link_path: RelativeSystemPathBuf::new("escape")?.into(),
                     link_target: RelativeSystemPathBuf::new("../")?.into(),
                 }],
-                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
+                expected_output: Err("tar attempts to write outside of directory: ../".to_string()),
             },
             TestCase {
                 name: "Double indirection: file",
@@ -772,7 +841,7 @@ mod tests {
                     },
                 ],
                 expected_files: vec![],
-                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
+                expected_output: Err("tar attempts to write outside of directory: ../".to_string()),
             },
             TestCase {
                 name: "Double indirection: folder",
@@ -790,17 +859,8 @@ mod tests {
                     },
                 ],
                 expected_files: vec![],
-                expected_error: Some("tar attempts to write outside of directory: ../".to_string()),
+                expected_output: Err("tar attempts to write outside of directory: ../".to_string()),
             },
-            // TestCase {
-            //     name: "name traversal",
-            //     input_files: vec![TarFile::File {
-            //         body: b"file".to_vec(),
-            //         path: RelativeSystemPathBuf::new("../escape")?.into(),
-            //     }],
-            //     expected_files: vec![],
-            //     expected_error: Some("tar attempts to write outside of directory:
-            // ../".to_string()), },
             TestCase {
                 name: "windows unsafe",
                 input_files: vec![TarFile::File {
@@ -819,9 +879,9 @@ mod tests {
                     vec![]
                 },
                 #[cfg(unix)]
-                expected_error: None,
+                expected_output: Ok(into_anchored_system_path_vec(vec!["back\\slash\\file"])),
                 #[cfg(windows)]
-                expected_error: Some("file name is not Windows-safe"),
+                expected_output: Err("file name is not Windows-safe".to_string()),
             },
             TestCase {
                 name: "fifo (and others) unsupported",
@@ -829,16 +889,10 @@ mod tests {
                     path: RelativeSystemPathBuf::new("fifo")?.into(),
                 }],
                 expected_files: vec![],
-                expected_error: Some(
-                    "attempted to restore unsupported file type: Fifo".to_string(),
-                ),
+                expected_output: Err("attempted to restore unsupported file type: Fifo".to_string()),
             },
-        ])
-    }
+        ];
 
-    #[test]
-    fn test_restore() -> Result<()> {
-        let tests = get_test_cases()?;
         for is_compressed in [true, false] {
             for test in &tests {
                 let input_dir = tempdir()?;
@@ -854,19 +908,21 @@ mod tests {
 
                 let mut cache_reader = CacheReader::open(&archive_path)?;
 
-                let restored_files = match (cache_reader.restore(&anchor), &test.expected_error) {
-                    (Ok(restored_files), Some(expected_error)) => {
+                match (cache_reader.restore(&anchor), &test.expected_output) {
+                    (Ok(restored_files), Err(expected_error)) => {
                         panic!(
                             "expected error: {:?}, received {:?}",
                             expected_error, restored_files
                         );
                     }
-                    (Ok(restored_files), None) => restored_files,
-                    (Err(err), Some(expected_error)) => {
+                    (Ok(restored_files), Ok(expected_files)) => {
+                        assert_eq!(&restored_files, expected_files);
+                    }
+                    (Err(err), Err(expected_error)) => {
                         assert_eq!(&err.to_string(), expected_error);
                         continue;
                     }
-                    (Err(err), None) => {
+                    (Err(err), Ok(_)) => {
                         panic!("unexpected error: {:?}", err);
                     }
                 };
@@ -944,7 +1000,7 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                tar_file: include_bytes!("../../examples/627737318531b1db.tar.zst"),
+                tar_file: include_bytes!("../../fixtures/627737318531b1db.tar.zst"),
             },
             TarTestCase {
                 expected_entries: vec![
@@ -1000,7 +1056,7 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
-                tar_file: include_bytes!("../../examples/c5da7df87dc01a95.tar.zst"),
+                tar_file: include_bytes!("../../fixtures/c5da7df87dc01a95.tar.zst"),
             },
         ]
     }
