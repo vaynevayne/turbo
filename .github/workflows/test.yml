@@ -95,7 +95,6 @@ jobs:
             xtask/**
             .cargo/**
             rust-toolchain
-            !crates/glob-match/**
             !crates/globwatch/**
             !crates/pidlock/**
             !crates/turborepo/**
@@ -123,7 +122,6 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
-            crates/glob-match/**
             crates/globwatch/**
             crates/pidlock/**
             crates/turborepo/**

@@ -10,7 +10,6 @@ members = [
   "crates/turbopack*",
   "crates/turbo-updater",
   "crates/turbopath",
-  "crates/glob-match",
   "crates/turborepo",
   "crates/turborepo-api-client",
   "crates/turborepo-ffi",
