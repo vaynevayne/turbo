@@ -10,13 +10,22 @@ autobenches = false
 bench = false
 
 [features]
+#tmp
+#default = ["swc_ecma_transform_plugin"]
+
 transform_emotion = []
+# [NOTE]: Be careful to explicitly enable this only for the supported platform / targets.
+swc_ecma_transform_plugin = [
+  "swc_core/plugin_transform_host_native",
+  "swc_core/common_plugin_transform",
+]
 
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }
